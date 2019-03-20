@@ -1,0 +1,4 @@
+/mock/
+/x86_64/
+/.build*.log
+/*.src.rpm
