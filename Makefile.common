@@ -1,0 +1,104 @@
+LOCALARCH := $(shell rpm --eval %{_arch})
+
+ARCHES = noarch i386 i586 i686 x86_64
+
+.PHONY :: $(ARCHES) local prep lint srpm help clean mockbuild
+
+ifndef WORKDIR
+WORKDIR := $(shell pwd)
+endif
+
+SRCRPMDIR ?= $(WORKDIR)
+BUILDDIR ?= $(WORKDIR)
+BUILDROOTDIR ?= $(WORKDIR)
+RPMDIR ?= $(WORKDIR)
+MOCKDIR ?= $(WORKDIR)/mock
+
+ifndef SOURCEDIR
+SOURCEDIR := $(shell pwd)
+endif
+ifndef SPECDIR
+SPECDIR := $(shell pwd)
+endif
+
+ifndef RPM_DEFINES
+RPM_DEFINES := --define "_sourcedir $(SOURCEDIR)" \
+                --define "_specdir $(SPECDIR)" \
+                --define "_builddir $(BUILDDIR)" \
+                --define "_buildrootdir $(BUILDROOTDIR)" \
+                --define "_srcrpmdir $(SRCRPMDIR)" \
+                --define "_rpmdir $(RPMDIR)"
+endif
+
+ifndef RPM
+RPM := rpmbuild
+endif
+ifndef RPM_WITH_DIRS
+RPM_WITH_DIRS = $(RPM) $(RPM_DEFINES)
+endif
+
+VER_REL := $(shell rpm $(RPM_DEFINES) -q --qf "%{VERSION} %{RELEASE}\n" --specfile $(SPECFILE)| head -1)
+
+ifndef NAME
+$(error "You can not run this Makefile without having NAME defined")
+endif
+
+ifndef VERSION
+VERSION := $(word 1, $(VER_REL))
+endif
+
+ifndef RELEASE
+RELEASE := $(word 2, $(VER_REL))
+endif
+
+all: local
+
+local: $(LOCALARCH)
+
+# build for a particular arch
+$(ARCHES) ::
+	$(RPM_WITH_DIRS) --target $@ -ba $(SPECFILE) 2>&1 | tee .build-$(VERSION)-$(RELEASE).log ; exit $${PIPESTATUS[0]}
+
+# check the build with rpmlint
+lint::
+	@test -e $(NAME)-$(VERSION)-$(RELEASE).src.rpm || (@echo "run 'make local' first" ; exit 1 )
+	@rpmlint $(NAME)-$(VERSION)-$(RELEASE).src.rpm */*-$(VERSION)-$(RELEASE).*.rpm
+
+prep::
+	$(RPM_WITH_DIRS) --nodeps -bp $(SPECFILE)
+
+
+## use this to build an srpm locally
+srpm::
+	$(RPM_WITH_DIRS) --nodeps -bs $(SPECFILE)
+
+help::
+	@echo "Usage: make <target>"
+	@echo "Available targets are:"
+	@echo " help                    Show this text"
+	@echo " <arch>                  Local test rpmbuild binary for specific arch"
+	@echo " local                   Local test rpmbuild binary"
+	@echo " prep                    Local test rpmbuild prep"
+	@echo " lint                    Run rpmlint against local build output"
+	@echo " srpm                    Create a srpm"
+	@echo " clog                    Create a changelog"
+	@echo " clean                   Cleanup"
+	@echo " mockbuild               Build in mock"
+
+clog: $(SPECFILE)
+	@sed -n '/^%changelog/,/^$$/{/^%/d;/^$$/d;s/%%/%/g;p}' $(SPECFILE) | tee $@
+
+# mop up, printing out exactly what was mopped.
+clean ::
+	@echo "Running the %clean script of the rpmbuild..."
+	-@$(RPM_WITH_DIRS) --clean --nodeps $(SPECFILE)
+	@if test -e $(SRCRPMDIR)/$(NAME)-$(VERSION)-$(RELEASE).src.rpm ; then \
+		echo "Deleting $(SRCRPMDIR)/$(NAME)-$(VERSION)-$(RELEASE).src.rpm" ; \
+		/bin/rm -f $(SRCRPMDIR)/$(NAME)-$(VERSION)-$(RELEASE).src.rpm ; \
+	fi
+	@rm -fv *~ clog .build-*
+	@echo "Fully clean!"
+
+mockbuild : srpm
+	mock $(MOCKARGS) --rebuild $(SRCRPMDIR)/$(NAME)-$(VERSION)-$(RELEASE).src.rpm --resultdir=$(MOCKDIR)
+
