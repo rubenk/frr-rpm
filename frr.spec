@@ -1,43 +1,14 @@
 # path defines
-%define     configdir   %{_sysconfdir}/%{name}
-%define     _sbindir    /usr/lib/frr
-%define     zeb_src     %{_builddir}/%{name}-%{frrversion}
-%define     zeb_rh_src  %{zeb_src}/redhat
-%define     zeb_docs    %{zeb_src}/doc
-%define     frr_tools   %{zeb_src}/tools
+%global     configdir   %{_sysconfdir}/%{name}
 
-# defines for configure
-%define     rundir  %{_localstatedir}/run/%{name}
+%global vtygroup frrvty
+%global frr_user frr
+%global frr_group frr
+%global frr_uid 92
+%global frr_gid 92
+%global vty_gid 85
 
-############################################################################
-
-#### Version String tweak
-# Remove invalid characters form version string and replace with _
-%{expand: %%global rpmversion %(echo '7.0' | tr [:blank:]- _ )}
-%define         frrversion   7.0
-
-    %global initsystem systemd
-
-# If init system is systemd, then always enable watchfrr
-%if "%{initsystem}" == "systemd"
-    %global with_watchfrr 1
-%endif
-
-#### Check for RedHat 6.x or CentOS 6.x - they are too old to support PIM.
-####   Always disable it on these old systems unconditionally
-#
-# if CentOS / RedHat and version < 7, then disable PIMd (too old, won't work)
-%if 0%{?rhel} && 0%{?rhel} < 7
-    %global  with_pimd  0
-%endif
-
-# misc internal defines
-%{!?frr_uid:            %global  frr_uid            92 }
-%{!?frr_gid:            %global  frr_gid            92 }
-%{!?vty_gid:            %global  vty_gid            85 }
-
-%define daemon_list zebra ripd ospfd bgpd isisd ripngd ospf6d pbrd bfdd watfrr bfdd
-%define all_daemons %{daemon_list}
+%global all_daemons zebra ripd ospfd bgpd isisd ripngd ospf6d pbrd bfdd watfrr bfdd
 
 Name:           frr
 Version:        7.0
@@ -50,9 +21,7 @@ URL:            https://www.frrouting.org
 
 Requires(pre):  shadow-utils
 
-BuildRequires:  bison
 BuildRequires:  c-ares-devel
-BuildRequires:  flex
 BuildRequires:  gcc
 BuildRequires:  json-c-devel
 BuildRequires:  libcap-devel
@@ -60,8 +29,7 @@ BuildRequires:  make
 BuildRequires:  ncurses-devel
 BuildRequires:  readline-devel
 BuildRequires:  libyang-devel
-BuildRequires:  python-devel >= 2.7
-BuildRequires:  python-sphinx
+BuildRequires:  python36-devel
 Requires:       initscripts
 BuildRequires:      systemd-devel
 Requires(post):     systemd
@@ -105,20 +73,22 @@ Group: System Environment/Daemons
 Requires: %{name} = %{version}-%{release}
 
 %description devel
-The frr-devel package contains the header and object files neccessary for
+The frr-devel package contains the header and object files necessary for
 developing OSPF-API and frr applications.
 
 
 %prep
-%setup -q -n frr-%{frrversion}
+%setup -q
 
 
 %build
 
 %configure \
-    --sbindir=%{_sbindir} \
+    PYTHONCONFIG=python36-config \
+    PYTHON=python3 \
+    --sbindir=/usr/lib/frr \
     --sysconfdir=%{configdir} \
-    --localstatedir=%{rundir} \
+    --localstatedir=%{_rundir}/%{name} \
     --disable-static \
     --disable-werror \
     --disable-babeld \
@@ -146,9 +116,9 @@ developing OSPF-API and frr applications.
     --enable-bfdd \
     --enable-multipath=256 \
     --enable-vtysh \
-    --enable-user=frr \
-    --enable-group=frr \
-    --enable-vty-group=frrvty \
+    --enable-user=%{frr_user} \
+    --enable-group=%{frr_group} \
+    --enable-vty-group=%{vty_group} \
     --enable-watchfrr \
     --enable-cumulus \
     --enable-systemd
@@ -160,7 +130,7 @@ make %{?_smp_mflags}
 
 
 %install
-mkdir -p %{buildroot}%{_sysconfdir}/{frr,sysconfig,logrotate.d,pam.d,default} \
+mkdir -p %{buildroot}%{_sysconfdir}/{frr,sysconfig,logrotate.d} \
          %{buildroot}%{_localstatedir}/log/frr
 make DESTDIR=%{buildroot} install
 
@@ -171,34 +141,25 @@ rm -vf %{buildroot}%{_libdir}/frr/libyang_plugins/*.la
 
 # install /etc sources
 mkdir -p %{buildroot}%{_unitdir}
-install -m644 %{zeb_rh_src}/frr.service %{buildroot}%{_unitdir}/frr.service
-install %{zeb_rh_src}/frr.init %{buildroot}%{_sbindir}/frr
+install -p -m 0644 redhat/frr.service %{buildroot}%{_unitdir}/frr.service
+install -p redhat/frr.init %{buildroot}%{_prefix}/lib/frr/frr
 
-install %{zeb_rh_src}/daemons %{buildroot}%{_sysconfdir}/frr
-install -m644 %{zeb_rh_src}/frr.pam %{buildroot}%{_sysconfdir}/pam.d/frr
-install -m644 %{zeb_rh_src}/frr.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/frr
-install -d -m750 %{buildroot}%{rundir}
-
+install -p redhat/daemons %{buildroot}%{_sysconfdir}/frr
+install -p -m 0644 redhat/frr.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/frr
+install  -d -m 0750 %{buildroot}%{_rundir}/%{name}
 
 %pre
 # add vty_group
-%if 0%{?vty_group:1}
-    getent group %{vty_group} >/dev/null || groupadd -r -g %{vty_gid} %{vty_group}
-%endif
+getent group %{vty_group} >/dev/null || groupadd -r -g %{vty_gid} %{vty_group}
 
-# add frr user and group
-%if 0%{?frr_user:1}
-    # Ensure that frr_gid gets correctly allocated
-    getent group %{frr_user} >/dev/null || groupadd -g %{frr_gid} %{frr_user}
-    getent passwd %{frr_user} >/dev/null || \
-    useradd -r -u %{frr_uid} -g %{frr_user} \
-        -s /sbin/nologin -c "FRRouting suite" \
-        -d %{rundir} %{frr_user}
+# Ensure that frr_gid gets correctly allocated
+getent group %{frr_user} >/dev/null || groupadd -g %{frr_gid} %{frr_user}
+getent passwd %{frr_user} >/dev/null || \
+useradd -r -u %{frr_uid} -g %{frr_user} \
+    -s /sbin/nologin -c "FRRouting suite" \
+    -d %{_rundir}/%{name} %{frr_user}
 
-    %if 0%{?vty_group:1}
-        usermod -a -G %{vty_group} %{frr_user}
-    %endif
-%endif
+usermod -a -G %{vty_group} %{frr_user}
 exit 0
 
 
@@ -206,38 +167,26 @@ exit 0
 # Create dummy files if they don't exist so basic functions can be used.
 if [ ! -e %{configdir}/zebra.conf ]; then
     echo "hostname `hostname`" > %{configdir}/zebra.conf
-%if 0%{?frr_user:1}
     chown %{frr_user}:%{frr_user} %{configdir}/zebra.conf*
-%endif
     chmod 640 %{configdir}/zebra.conf*
 fi
 for daemon in %{all_daemons} ; do
     if [ x"${daemon}" != x"" ] ; then
         if [ ! -e %{configdir}/${daemon}.conf ]; then
             touch %{configdir}/${daemon}.conf
-            %if 0%{?frr_user:1}
-                chown %{frr_user}:%{frr_user} %{configdir}/${daemon}.conf*
-            %endif
+            chown %{frr_user}:%{frr_user} %{configdir}/${daemon}.conf*
         fi
     fi
 done
-%if 0%{?frr_user:1}
-    chown %{frr_user}:%{frr_user} %{configdir}/daemons
-%endif
+chown %{frr_user}:%{frr_user} %{configdir}/daemons
 
-%if %{with_watchfrr}
-    # No config for watchfrr - this is part of /etc/sysconfig/frr
-    rm -f %{configdir}/watchfrr.*
-%endif
+# No config for watchfrr - this is part of /etc/sysconfig/frr
+rm -f %{configdir}/watchfrr.*
 
 if [ ! -e %{configdir}/vtysh.conf ]; then
     touch %{configdir}/vtysh.conf
     chmod 640 %{configdir}/vtysh.conf
-%if 0%{?frr_user:1}
-    %if 0%{?vty_group:1}
-        chown %{frr_user}:%{vty_group} %{configdir}/vtysh.conf*
-    %endif
-%endif
+    chown %{frr_user}:%{vty_group} %{configdir}/vtysh.conf*
 fi
 
 
@@ -248,9 +197,9 @@ fi
 
 
 %preun
-    if [ $1 -eq 0 ] ; then
-        %systemd_preun frr.service
-    fi
+if [ $1 -eq 0 ] ; then
+    %systemd_preun frr.service
+fi
 
 
 %files
@@ -258,28 +207,27 @@ fi
 %doc doc/mpls
 %doc README.md
 /usr/share/yang/*.yang
-%dir %attr(751,frr,frr) %{configdir}
-%dir %attr(750,frr,,frr) %{_localstatedir}/log/frr
-%dir %attr(751,frr,,frr) %{rundir}
-%attr(750,frr,frrvty) %{configdir}/vtysh.conf.sample
-%{_sbindir}/zebra
-%{_sbindir}/bgpd
-%exclude %{_sbindir}/ssd
-%{_sbindir}/watchfrr
-%{_sbindir}/bfdd
+%dir %attr(751,%{frr_user},%{frr_group}) %{configdir}
+%dir %attr(750,%{frr_user},%{frr_group}) %{_localstatedir}/log/frr
+%dir %attr(751,%{frr_user},%{frr_group}) %{_rundir}/%{name}
+%attr(750,%{frr_user},%{vty_group}) %{configdir}/vtysh.conf.sample
+%{_prefix}/lib/frr/zebra
+%{_prefix}/lib/frr/bgpd
+%exclude %{_prefix}/lib/frr/ssd
+%{_prefix}/lib/frr/watchfrr
+%{_prefix}/lib/frr/bfdd
 %{_libdir}/lib*.so.0
 %{_libdir}/lib*.so.0.*
 %{_bindir}/*
 %config(noreplace) %{configdir}/[!v]*.conf*
 %config(noreplace) %attr(750,%{frr_user},%{frr_user}) %{configdir}/daemons
 %{_unitdir}/frr.service
-%{_sbindir}/frr
-%config(noreplace) %{_sysconfdir}/pam.d/frr
+%{_prefix}/lib/frr/frr
 %config(noreplace) %{_sysconfdir}/logrotate.d/frr
-%{_sbindir}/frr-reload
-%{_sbindir}/frrcommon.sh
-%{_sbindir}/frrinit.sh
-%{_sbindir}/watchfrr.sh
+%{_prefix}/lib/frr/frr-reload
+%{_prefix}/lib/frr/frrcommon.sh
+%{_prefix}/lib/frr/frrinit.sh
+%{_prefix}/lib/frr/watchfrr.sh
 
 
 %files contrib
@@ -287,9 +235,9 @@ fi
 
 
 %files pythontools
-%{_sbindir}/frr-reload.py
-%{_sbindir}/frr-reload.pyc
-%{_sbindir}/frr-reload.pyo
+%{_prefix}/lib/frr/frr-reload.py
+%{_prefix}/lib/frr/frr-reload.pyc
+%{_prefix}/lib/frr/frr-reload.pyo
 
 
 %files devel
@@ -301,7 +249,7 @@ fi
 
 
 %changelog
-* Thu Feb 28 2019 Martin Winter <mwinter@opensourcerouting.org> - %{version}
+* Thu Feb 28 2019 Martin Winter <mwinter@opensourcerouting.org> - 7.0
 - Added libyang dependency: New work for northbound interface based on libyang
 - Fabricd: New Daemon based on https://datatracker.ietf.org/doc/draft-white-openfabric/
 - various bug fixes and other enhancements
@@ -334,7 +282,7 @@ fi
 - BGPD: Flowspec
 - PBRD: Add a new Policy Based Routing Daemon
 
-* Mon May 28 2018 Rafael Zalamena <rzalamena@opensourcerouting.org> - %{version}
+* Mon May 28 2018 Rafael Zalamena <rzalamena@opensourcerouting.org> - 4.0
 - Add BFDd support
 
 * Sun May 20 2018 Martin Winter <mwinter@opensourcerouting.org>
