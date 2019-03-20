@@ -36,7 +36,7 @@
 %{!?frr_gid:            %global  frr_gid            92 }
 %{!?vty_gid:            %global  vty_gid            85 }
 
-%define daemon_list zebra ripd ospfd bgpd isisd ripngd ospf6d pbrd staticd bfdd fabricd watfrr bfdd
+%define daemon_list zebra ripd ospfd bgpd isisd ripngd ospf6d pbrd bfdd watfrr bfdd
 %define all_daemons %{daemon_list}
 
 Name:           frr
@@ -125,6 +125,7 @@ developing OSPF-API and frr applications.
     --disable-bgp-vnc \
     --disable-doc \
     --disable-eigrpd \
+    --disable-fabricd \
     --disable-fpm \
     --disable-irdp \
     --disable-isisd \
@@ -140,6 +141,8 @@ developing OSPF-API and frr applications.
     --disable-ripngd \
     --disable-rpki \
     --disable-rtadv \
+    --disable-sharpd \
+    --disable-staticd \
     --enable-bfdd \
     --enable-multipath=256 \
     --enable-vtysh \
@@ -260,11 +263,9 @@ fi
 %dir %attr(751,frr,,frr) %{rundir}
 %attr(750,frr,frrvty) %{configdir}/vtysh.conf.sample
 %{_sbindir}/zebra
-%{_sbindir}/staticd
 %{_sbindir}/bgpd
 %exclude %{_sbindir}/ssd
 %{_sbindir}/watchfrr
-%{_sbindir}/fabricd
 %{_sbindir}/bfdd
 %{_libdir}/lib*.so.0
 %{_libdir}/lib*.so.0.*
