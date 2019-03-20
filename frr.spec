@@ -1,6 +1,6 @@
 %global configdir   %{_sysconfdir}/%{name}
 
-%global vtygroup frrvty
+%global vty_group frrvty
 %global frr_user frr
 %global frr_group frr
 %global frr_uid 92
@@ -26,9 +26,14 @@ BuildRequires:  json-c-devel
 BuildRequires:  libcap-devel
 BuildRequires:  make
 BuildRequires:  ncurses-devel
+BuildRequires:  perl
 BuildRequires:  readline-devel
 BuildRequires:  libyang-devel
+%if 0%{?fedora}
+BuildRequires:  python3-devel
+%else
 BuildRequires:  python36-devel
+%endif
 Requires:       initscripts
 BuildRequires:      systemd-devel
 Requires(post):     systemd
@@ -205,7 +210,7 @@ fi
 %doc */*.sample* COPYING
 %doc doc/mpls
 %doc README.md
-/usr/share/yang/*.yang
+%{_datarootdir}/yang/*.yang
 %dir %attr(751,%{frr_user},%{frr_group}) %{configdir}
 %dir %attr(750,%{frr_user},%{frr_group}) %{_localstatedir}/log/frr
 %dir %attr(751,%{frr_user},%{frr_group}) %{_rundir}/%{name}
