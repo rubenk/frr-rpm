@@ -1,5 +1,4 @@
-# path defines
-%global     configdir   %{_sysconfdir}/%{name}
+%global configdir   %{_sysconfdir}/%{name}
 
 %global vtygroup frrvty
 %global frr_user frr
@@ -64,7 +63,7 @@ Requires: python-ipaddress
 Group: System Environment/Daemons
 
 %description pythontools
-Contributed python 2.7 tools which may be of use with frr.
+Contributed python tools which may be of use with frr.
 
 
 %package devel
