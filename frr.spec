@@ -11,7 +11,7 @@
 
 Name:           frr
 Version:        7.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Routing daemon
 License:        GPLv2+
 Group:          System Environment/Daemons
@@ -32,7 +32,7 @@ BuildRequires:  libyang-devel
 %if 0%{?fedora}
 BuildRequires:  python3-devel
 %else
-BuildRequires:  python36-devel
+BuildRequires:  python34-devel
 %endif
 Requires:       initscripts
 BuildRequires:      systemd-devel
@@ -63,9 +63,8 @@ Contributed/3rd party tools which may be of use with frr.
 
 %package pythontools
 Summary: python tools for frr
-BuildRequires: python
-Requires: python-ipaddress
 Group: System Environment/Daemons
+Requires: python3
 
 %description pythontools
 Contributed python tools which may be of use with frr.
@@ -83,13 +82,12 @@ developing OSPF-API and frr applications.
 
 %prep
 %setup -q
-
+sed -e '1c #!/usr/bin/python3' -i tools/frr-reload.py
 
 %build
 
 %configure \
-    PYTHONCONFIG=python36-config \
-    PYTHON=python3 \
+    PYTHONCONFIG=python3-config \
     --sbindir=/usr/lib/frr \
     --sysconfdir=%{configdir} \
     --localstatedir=%{_rundir}/%{name} \
@@ -130,7 +128,7 @@ developing OSPF-API and frr applications.
 sed -i 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
 sed -i 's|^runpath_var=LD_RUN_PATH|runpath_var=DIE_RPATH_DIE|g' libtool
 
-make %{?_smp_mflags}
+make %{?_smp_mflags} PYTHON=%{_bindir}/python3
 
 
 %install
@@ -240,8 +238,6 @@ fi
 
 %files pythontools
 %{_prefix}/lib/frr/frr-reload.py
-%{_prefix}/lib/frr/frr-reload.pyc
-%{_prefix}/lib/frr/frr-reload.pyo
 
 
 %files devel
@@ -253,6 +249,13 @@ fi
 
 
 %changelog
+* Wed Mar 20 2019 Ruben Kerkhof <ruben@tilaa.com> - 7.0-2
+- Fix build with python3 on Fedora
+
+* Wed Mar 20 2019 Ruben Kerkhof <ruben@tilaa.com> - 7.0-1
+- Just build zebra and bgpd
+- Remove a lot of stuff from the spec we don't need
+
 * Thu Feb 28 2019 Martin Winter <mwinter@opensourcerouting.org> - 7.0
 - Added libyang dependency: New work for northbound interface based on libyang
 - Fabricd: New Daemon based on https://datatracker.ietf.org/doc/draft-white-openfabric/
